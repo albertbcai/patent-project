@@ -56,6 +56,12 @@ def get_earnings_call_strings(beautiful_soup):
     earnings_call_strings = [t.text.encode('utf-8') for t in c5_tags_list if check_c5_is_earnings_call_string(t)]
     return earnings_call_strings
 
+# returns the header strings which are found by looking for div class = 'c5'    
+def get_earnings_call_strings_as_tags(beautiful_soup):
+    c5_tags_list = soup.findAll("div", {"class": "c5"})
+    earnings_call_strings_as_tags = [t for t in c5_tags_list if check_c5_is_earnings_call_string(t)]
+    return earnings_call_strings_as_tags
+
 # helper function that given start and end tags concatenates every string between them. Note comments must be removed
 def loop_until_next_tag(text, current_tag, next_tag):
         if (str(type(current_tag)) == "<class 'bs4.element.NavigableString'>"):
@@ -86,6 +92,7 @@ file_name_list = [f for f in listdir(location) if isfile(join(location, f))]
 soup = make_new_soup(file_name_list[0])
 
 earnings_call_strings = get_earnings_call_strings(soup)
+earnings_call_strings_as_tags = get_earnings_call_strings_as_tags(soup)
 
 # TODO: iterate over every file. Currently we are just iterating over Apple's file
 for i in range(len(earnings_call_strings)):
@@ -95,8 +102,8 @@ for i in range(len(earnings_call_strings)):
     quarter = get_quarter(current_header)
     text_body = ""
     # the last text body is a corner case to be handled
-    if (i is not len(earnings_call_strings - 1)):
-        text_body = get_text_body(current_header, earnings_call_strings[i + 1])
+    if (i is not len(earnings_call_strings) - 1):
+        text_body = get_text_body(earnings_call_strings_as_tags[i], earnings_call_strings_as_tags[i + 1])
     else:
-        text_body = handle_last_text_body(current_header, soup)
-    #TODO: put all these variables (name, year, quarter, etc.) in a CSV
+        text_body = handle_last_text_body(earnings_call_strings_as_tags[i], soup)
+    #TODO: put all these variables (name, year, quarter, etc.) in a CSV and then clear memory space somehow
