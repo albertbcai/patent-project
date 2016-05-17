@@ -1,5 +1,4 @@
-from pandas import *
-import os, re
+import os, re, xlrd
 
 # change this location depending on where the files are saved; ideally, this would be online
 
@@ -37,11 +36,12 @@ def get_quarter(earnings_call_string):
 
 def is_earnings_commentary(earnings_call_string):
     lowercase_string = earnings_call_string.lower()
-    return "earnings commentary" in lowercase_string
+    return "conference call" not in lowercase_string and ("earnings commentary" in lowercase_string or "event brief" in lowercase_string)
 
 def remove_tags(text):
     tagless_text = re.sub('<(\/?)[a-zA-Z0-9=\"_ ]*>', '', text)
     uncommented_text = re.sub('<!--[a-zA-Z0-9=<>_\n\"? ]*-->', '', tagless_text).replace('<!-- Hide XML section from browser', '')
+    uncommented_text = uncommented_text.replace('&amp;', '&')
     return uncommented_text
 
 def should_be_filtered(header):
@@ -51,6 +51,59 @@ def should_be_filtered(header):
     else:
         return False
     
+# fixes the quarter by replacing anomalies
+def fix_quarter(quarter):
+    fixed_quarter = quarter.replace('1Q', 'Q1')
+    fixed_quarter = fixed_quarter.replace('2Q', 'Q2')
+    fixed_quarter = fixed_quarter.replace('2Q', 'Q2')
+    fixed_quarter = fixed_quarter.replace('3Q', 'Q3')
+    fixed_quarter = fixed_quarter.replace('4Q', 'Q4')
+    fixed_quarter = fixed_quarter.replace('Accenture', '')
+    fixed_quarter = fixed_quarter.replace('Ford Motor', '')
+    fixed_quarter = fixed_quarter.replace('General Electric', '')
+    fixed_quarter = fixed_quarter.replace('\'', '')
+    fixed_quarter = fixed_quarter.replace('Full Year', 'FY')
+    fixed_quarter = fixed_quarter.replace('Half Year', 'HY')
+    fixed_quarter = fixed_quarter.replace('First Quarter', 'Q1')
+    fixed_quarter = fixed_quarter.replace('Second Quarter', 'Q2')
+    fixed_quarter = fixed_quarter.replace('Third Quarter', 'Q3')
+    fixed_quarter = fixed_quarter.replace('Fourth Quarter', 'Q4')
+    fixed_quarter = fixed_quarter.replace('1st Quarter', 'Q1')
+    fixed_quarter = fixed_quarter.replace('2nd Quarter', 'Q2')
+    fixed_quarter = fixed_quarter.replace('3rd Quarter', 'Q3')
+    fixed_quarter = fixed_quarter.replace('4th Quarter', 'Q4')
+    fixed_quarter = fixed_quarter.replace('Report', '')
+    fixed_quarter = fixed_quarter.replace('FullYear', 'FY')
+    return fixed_quarter
+        
+def name_is_similar_enough(correct_name, input_name):
+    if string_similarity(correct_name, input_name) > 0.42:
+        return True
+    else:
+        return False
+
+def get_bigrams(string):
+    '''
+    Takes a string and returns a list of bigrams
+    '''
+    s = string.lower()
+    return [s[i:i+2] for i in xrange(len(s) - 1)]
+
+def string_similarity(str1, str2):
+    '''
+    Perform bigram comparison between two strings
+    and return a percentage match in decimal form
+    '''
+    pairs1 = get_bigrams(str1)
+    pairs2 = get_bigrams(str2)
+    union  = len(pairs1) + len(pairs2)
+    hit_count = 0
+    for x in pairs1:
+        for y in pairs2:
+            if x == y:
+                hit_count += 1
+                break
+    return (2.0 * hit_count) / union
 
 # Open the file to write
 output = open('C:\Users\TTH\Documents\College Freshman Year\PURM Summer Stuff\Programming Workspace\EarningCall\\test.txt', 'w')
@@ -60,19 +113,27 @@ index = 0
 excel_location = 'C:\Users\TTH\Documents\College Freshman Year\PURM Summer Stuff\Programming Workspace\EarningCall'
 
 #Make dictionary of top 100 companies' tickers to standardized names
-xls = ExcelFile(excel_location + '\\' + 'S&P 500.xls')
-df = xls.parse(xls.sheet_names[0])
-print df.to_dict()
-
+d = {}
+wb = xlrd.open_workbook(excel_location + '\\' + 'S&P 500.xlsx')
+sh = wb.sheet_by_index(1)
+for i in range(2, 506):
+    cell_value_class = sh.cell(i,0).value.encode('utf8')
+    cell_value_id = sh.cell(i,1).value.encode('utf8')
+    d[cell_value_class] = cell_value_id
+   
 # Iterate through every file in the directory
 for trans in dirset:
     f = open(trans,'rb')
     file_content1 = f.read()
     f.close()
     file_content2 = file_content1.split('<DOCFULL> -->')
-    if "WAG.HTML" in trans:
-        pass
-
+    
+    ticker = dirset[index].replace('.HTML','')
+    standard_name = ''
+    if ticker not in d:
+        standard_name = '$$$'
+    else:
+        standard_name = d[dirset[index].replace('.HTML','')]
     # Iterate through every report in each file
     for quart in file_content2[1:len(file_content2)]:
 
@@ -89,8 +150,10 @@ for trans in dirset:
         if (should_be_filtered(full_header)):
             continue
         
-        # Determine if it is an earnings commentary or conference
-        commentary_flag = is_earnings_commentary(full_header)
+        # Throw out commentaries and event briefs
+        if is_earnings_commentary(full_header):
+            continue
+        
 
         # Date is obtained without using the header
         start = '<DIV CLASS="c3"><P CLASS="c1"><SPAN CLASS="c4">'
@@ -98,9 +161,9 @@ for trans in dirset:
         date = remove_tags(quart[quart.find(start):quart.find(end,quart.find(start))])
 
         # Process the title to find the quarter, year, and company name
-        quarter = get_quarter(earnings_call_string)
+        quarter = get_quarter(earnings_call_string).replace('&amp;', '&')
         year = get_year(full_header)
-        name = get_name(earnings_call_string)
+        name = get_name(earnings_call_string).replace('&amp;', '&')
 
         # indicates name came before quarter and year
         if name is '':
@@ -115,9 +178,19 @@ for trans in dirset:
             
             quarter = re.sub('\d{2,4}', '', earnings_call_string)
             quarter = quarter.replace(name, '').strip()
+            
+        # if ticker wasn't found, consider the first name to be the standard name    
+        if standard_name is '$$$':
+            standard_name = name
 
-        # Start the text body at 'LENGTH' and end at 'reserves the rights to make changes to documents'
-        start = 'LENGTH:'
+        if not name_is_similar_enough(standard_name, name):
+            continue
+        name = standard_name
+
+        # Start the text body at LENGTH (if it exists) and end at 'reserves the rights to make changes to documents'
+        start = "LENGTH"
+        if quart.find(start) is -1:
+            start = full_header.split(" ")[-1]
         end = 'reserves the right to make changes to documents'
         text_body = quart[quart.find(start):quart.find(end)]
 
@@ -127,13 +200,15 @@ for trans in dirset:
         # Remove new lines from text body
         text_body = text_body.replace('\n', '')
 
+        # Fix the quarters
+        quarter = fix_quarter(quarter)
+        
         # Write to file
         outputline = dirset[index].replace('.HTML','') + '\t' + \
                      name + '\t' + \
                      quarter + '\t' + \
                      year + '\t' + \
                      date + '\t' + \
-                     str(commentary_flag) + '\t' + \
                      text_body
                      
         # Make a new line to separate output             
