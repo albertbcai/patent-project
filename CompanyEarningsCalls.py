@@ -1,3 +1,4 @@
+from pandas import *
 import os, re
 
 # change this location depending on where the files are saved; ideally, this would be online
@@ -56,6 +57,13 @@ output = open('C:\Users\TTH\Documents\College Freshman Year\PURM Summer Stuff\Pr
 
 index = 0
 
+excel_location = 'C:\Users\TTH\Documents\College Freshman Year\PURM Summer Stuff\Programming Workspace\EarningCall'
+
+#Make dictionary of top 100 companies' tickers to standardized names
+xls = ExcelFile(excel_location + '\\' + 'S&P 500.xls')
+df = xls.parse(xls.sheet_names[0])
+print df.to_dict()
+
 # Iterate through every file in the directory
 for trans in dirset:
     f = open(trans,'rb')
@@ -87,7 +95,7 @@ for trans in dirset:
         # Date is obtained without using the header
         start = '<DIV CLASS="c3"><P CLASS="c1"><SPAN CLASS="c4">'
         end = '</SPAN></P>'
-        date = quart[quart.find(start):quart.find(end,quart.find(start))].replace('<DIV CLASS="c3"><P CLASS="c1"><SPAN CLASS="c4">','').replace('</SPAN><SPAN CLASS="c2">',' ')
+        date = remove_tags(quart[quart.find(start):quart.find(end,quart.find(start))])
 
         # Process the title to find the quarter, year, and company name
         quarter = get_quarter(earnings_call_string)
@@ -108,8 +116,13 @@ for trans in dirset:
             quarter = re.sub('\d{2,4}', '', earnings_call_string)
             quarter = quarter.replace(name, '').strip()
 
+        # Start the text body at 'LENGTH' and end at 'reserves the rights to make changes to documents'
+        start = 'LENGTH:'
+        end = 'reserves the right to make changes to documents'
+        text_body = quart[quart.find(start):quart.find(end)]
+
         # Extract the full text body from each document by removing tags
-        text_body = remove_tags(quart)
+        text_body = remove_tags(text_body)
 
         # Remove new lines from text body
         text_body = text_body.replace('\n', '')
@@ -121,7 +134,6 @@ for trans in dirset:
                      year + '\t' + \
                      date + '\t' + \
                      str(commentary_flag) + '\t' + \
-                     full_header + '\t' + \
                      text_body
                      
         # Make a new line to separate output             
