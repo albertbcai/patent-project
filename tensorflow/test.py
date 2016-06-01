@@ -1,47 +1,36 @@
-import tensorflow as tf
+'''Write to a sql file'''
 
-# Create a Constant op that produces a 1x2 matrix.  The op is
-# added as a node to the default graph.
-#
-# The value returned by the constructor represents the output
-# of the Constant op.
-matrix1 = tf.constant([[3., 3.]])
+import sqlalchemy as sa
 
-# Create another Constant that produces a 2x1 matrix.
-matrix2 = tf.constant([[2.],[2.]])
+db = sa.create_engine('sqlite:///patent_database.db')
+db.echo = False  # Try changing this to True and see what happens
+metadata = sa.MetaData(db)
+text = sa.Table('text2', metadata,
+    sa.Column('patent_id', sa.String(), primary_key=True),
+    sa.Column('abstract', sa.String()),
+    sa.Column('description', sa.String()),
+)
+text.create()
+i = text.insert()
+i.execute(patent_id='Mary', abstract='12341235')
 
-# Create a Matmul op that takes 'matrix1' and 'matrix2' as inputs.
-# The returned value, 'product', represents the result of the matrix
-# multiplication.
-product = tf.matmul(matrix1, matrix2)
+inventors = sa.Table('inventors', metadata,
+    sa.Column('patent_id', sa.String(40), primary_key=True),
+    sa.Column('index', sa.Integer),
+    sa.Column('inventor', sa.string(40)),
+)
 
-# Launch the default graph.
-sess = tf.Session()
 
-# To run the matmul op we call the session 'run()' method, passing 'product'
-# which represents the output of the matmul op.  This indicates to the call
-# that we want to get the output of the matmul op back.
-#
-# All inputs needed by the op are run automatically by the session.  They
-# typically are run in parallel.
-#
-# The call 'run(product)' thus causes the execution of three ops in the
-# graph: the two constants and matmul.
-#
-# The output of the op is returned in 'result' as a numpy `ndarray` object.
-result = sess.run(product)
-print(result)
-# ==> [[ 12.]]
+inventors.select
 
-# Close the Session when we're done.
-sess.close()
+s = text.select()
+rs = s.execute()
 
-with tf.Session() as sess:
-  result = sess.run([product])
-  print(result)
+row = rs.fetchone()
+print 'Id:', row[0]
+print 'Abstract:', row['abstract']
+print 'abstract', row.abstract
+print 'abstract', row[text.c.abstract]
 
-with tf.Session() as sess:
-  with tf.device("/gpu:0"):
-    matrix1 = tf.constant([[3., 3.]])
-    matrix2 = tf.constant([[2.],[2.]])
-    product = tf.matmul(matrix1, matrix2)
+for row in rs:
+    print row.name, 'is', row.age, 'years old'
